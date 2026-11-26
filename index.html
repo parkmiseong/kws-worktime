@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="description" content="국가근로 월 근로시간을 달력으로 관리하는 앱">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>국가근로 근무표</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+[hidden]{display:none!important}
+body{padding-top:env(safe-area-inset-top,0px)}
+/* VOICE everyday tool, calm and exact
+   IDEA a printed work-study time card: black ink blocks, red holidays like a Korean wall calendar
+   PICTURE the month calendar itself, each cell carrying its hours
+   COLOUR white ground, black ink, signal red for holidays and overage, plain grey for leave
+   TYPE Archivo wide 800 for numerals + Noto Sans KR
+   LAYOUT one phone column (max 460px, centred on laptop): title, big total, advice, calendar, sheets slide up */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0e0e0e);--ink:light-dark(#111111,#f2f2f2);--sub:light-dark(#6b6b6b,#9a9a9a);--line:light-dark(#e3e3e0,#2a2a2a);--surf:light-dark(#f4f4f1,#181818);--red:light-dark(#e4002b,#ff4d5e);--redbg:light-dark(#fff1f3,#2a1013);--onink:light-dark(#ffffff,#111111);--grey:light-dark(#d6d6d2,#3a3a3a)}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 "Noto Sans KR",system-ui,sans-serif;overflow-x:clip}
+.num{font-family:Archivo,"Noto Sans KR",sans-serif;font-stretch:112%;font-variant-numeric:tabular-nums}
+.app{max-width:460px;margin:0 auto;padding:24px max(20px,env(safe-area-inset-right,0px)) 48px max(20px,env(safe-area-inset-left,0px))}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:4px solid var(--ink);padding-bottom:14px}
+h1{font-size:28px;line-height:1.05;letter-spacing:-.02em;margin:0;font-weight:800}
+.btn{font:inherit;font-size:15px;font-weight:700;color:var(--ink);background:var(--surf);border:1px solid var(--line);border-radius:10px;min-height:44px;padding:0 14px;cursor:pointer}
+.btn:hover{border-color:var(--ink)}
+.btn:focus-visible,.cell:focus-visible,.slot:focus-visible,.navb:focus-visible,.x:focus-visible,.add:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.btn.dark{background:var(--ink);color:var(--onink);border-color:var(--ink)}
+.btn.red{background:var(--red);color:#fff;border-color:var(--red)}
+.total{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 16px;align-items:end;padding:22px 0 18px}
+.big{font-weight:800;font-size:clamp(64px,20vw,84px);line-height:.9;letter-spacing:-.03em}
+.big small{font-size:22px;font-weight:700;letter-spacing:0;margin-left:2px}
+.tl{font-size:15px;color:var(--sub);line-height:1.45}
+.tl b{color:var(--ink);font-weight:700}
+.bar{grid-column:1/-1;height:10px;background:var(--surf);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:12px}
+.bar i{display:block;height:100%;background:var(--ink)}
+.bar.over i{background:var(--red)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.stats div{padding:14px 0 14px 16px;border-left:1px solid var(--line)}
+.stats div:first-child{border-left:0;padding-left:0}
+.stats span{display:block;font-size:13px;color:var(--sub);margin-bottom:2px}
+.stats b{font-size:19px;white-space:nowrap}
+.warn{margin:14px 0 0;font-size:14px;color:var(--red);font-weight:700}
+.need{position:sticky;top:env(safe-area-inset-top,0px);z-index:3;margin-top:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1.5px solid var(--red);background:var(--redbg);border-radius:12px;padding:10px 10px 10px 14px;font-size:14px;line-height:1.4}
+.need b{color:var(--red)}
+.need[hidden]{display:none}
+.mini{font:inherit;font-size:12px;font-weight:700;color:var(--red);background:var(--bg);border:1px solid var(--red);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:1px;cursor:pointer;white-space:nowrap}
+.mini:hover{background:var(--redbg)}
+.mini:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.need .btn{min-height:40px;font-size:14px;background:var(--bg);flex:none}
+.modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(400px,calc(100% - 32px));max-height:86svh;overflow:auto;background:var(--bg);border-radius:18px;z-index:6;padding:24px 20px 20px;animation:pop .2s ease-out}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-46%)}}
+@media(prefers-reduced-motion:reduce){.modal{animation:none}}
+.modal.still{animation:none}
+.ovk{margin:0;font-size:14px;color:var(--sub)}
+.modal h3{margin:4px 0 0;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15;color:var(--red)}
+.modal>p{margin:8px 0 14px;font-size:15px;color:var(--sub)}
+.rec{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.rec b{display:block;font-size:15px}
+.rec span{font-size:13px;color:var(--sub)}
+.rec .btn{min-height:40px;font-size:14px;background:var(--bg)}
+.modal .row{border-top:1px solid var(--line);padding-top:16px;margin-top:4px}
+.cell.npc{background:light-dark(#efefec,#1c1c1c)}
+.cell.npc:hover{background:light-dark(#e7e7e3,#232323)}
+.prow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--sub)}
+.prow>b{width:64px;color:var(--ink);font-size:15px}
+.pchk{display:flex;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--line);font-weight:700;cursor:pointer}
+.pchk input{width:20px;height:20px;accent-color:var(--ink)}
+.per.off .prow{opacity:.35}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:14px 0 10px}
+.wnote{margin:0;padding:0 0 14px;font-size:13px;color:var(--sub);border-bottom:1px solid var(--line)}
+.seg button{font:inherit;font-size:15px;font-weight:700;min-height:56px;border-radius:10px;border:1px solid var(--line);background:var(--surf);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.3}
+.seg button span{font-size:12px;font-weight:500;color:var(--sub)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--onink);border-color:var(--ink)}
+.seg button[aria-pressed=true] span{color:var(--onink);opacity:.75}
+.seg button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.nav{display:flex;align-items:center;justify-content:space-between;margin:28px 0 12px}
+.nav h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em}
+.navb{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:22px;cursor:pointer}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.dow span{text-align:center;font-size:13px;color:var(--sub);padding-bottom:8px;font-weight:700}
+.dow span:first-child{color:var(--red)}
+.grid{border-top:2px solid var(--ink)}
+.cell{position:relative;height:70px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;text-align:left;padding:7px 5px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between}
+.cell:hover{background:var(--surf)}
+.cell.out{visibility:hidden}
+.d{font-size:14px;font-weight:700;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;margin:-2px 0 0 -2px}
+.cell.sun .d,.cell.hol .d{color:var(--red)}
+.cell.sat .d{color:var(--sub)}
+.cell.today .d{background:var(--ink);color:var(--onink)}
+.cell.hol.today .d{background:var(--red);color:#fff}
+.h{font-size:15px;font-weight:800;line-height:1}
+.h.zero{color:var(--line)}
+.hn{font-size:11px;color:var(--red);font-weight:700;line-height:1.1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cell.lv::after{content:"";position:absolute;right:5px;top:9px;width:12px;height:8px;border-radius:2px;background:var(--grey)}
+.cell.sel{box-shadow:inset 0 0 0 2px var(--ink);border-radius:6px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--sub);margin-top:16px}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.k1{background:var(--ink)}
+.k2{background:var(--grey)}
+.k3{background:var(--red)}
+.note{font-size:13px;color:var(--sub);margin-top:18px}
+.scrim{position:fixed;inset:0;background:rgb(0 0 0/.4);z-index:5}
+.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:460px;max-height:86svh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;z-index:6;padding:0 max(20px,env(safe-area-inset-right,0px)) 0 max(20px,env(safe-area-inset-left,0px));scrollbar-width:none;overscroll-behavior:contain;box-shadow:0 -1px 0 var(--line);animation:up .22s ease-out}
+.sheet.still{animation:none}
+@keyframes up{from{transform:translateY(40px);opacity:.4}}
+@media(prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{position:sticky;top:0;z-index:3;height:30px;margin:0 -20px;background:var(--bg)}
+.grab::after{content:"";position:absolute;left:50%;top:12px;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--line)}
+.sheet::-webkit-scrollbar{display:none}
+.sheet .sh{position:sticky;top:30px;z-index:2;background:var(--bg)}
+.sheet>.row:last-child{position:sticky;bottom:0;z-index:2;background:var(--bg);margin-top:18px;padding:14px 0 calc(20px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.sh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:4px solid var(--ink);padding-bottom:12px}
+.sh h3{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.sh p{margin:6px 0 0;font-size:14px;color:var(--sub)}
+.dayh{font-size:34px;font-weight:800;line-height:1;white-space:nowrap}
+.dayh small{font-size:15px;margin-left:2px}
+.hint{font-size:14px;color:var(--sub);margin:14px 0}
+.tline{display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:14px}
+.tt{font-size:14px;font-weight:700;color:var(--ink);transform:translateY(-10px)}
+.slot{min-height:52px;margin:0 0 6px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--onink);font:inherit;font-size:15px;font-weight:700;text-align:left;padding:0 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.slot.leave{background:var(--grey);color:var(--ink);border-color:var(--grey)}
+.slot.gap{min-height:36px;background:none;color:var(--sub);border:1px dashed var(--line);cursor:default;font-weight:500;font-size:13px}
+.slot span{font-weight:500;font-size:13px;opacity:.8}
+.empty{padding:32px 0;text-align:center;color:var(--sub)}
+.empty b{display:block;font-size:20px;color:var(--ink);margin-bottom:4px}
+.empty.hol b{color:var(--red)}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.row .btn{flex:1 1 140px}
+.wd{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:10px;align-items:start;padding:14px 0;border-bottom:1px solid var(--line)}
+.wd label.tog{display:flex;align-items:center;gap:6px;font-weight:800;font-size:16px;cursor:pointer;height:40px}
+.wd input[type=checkbox]{width:20px;height:20px;accent-color:var(--ink)}
+.blks{display:grid;gap:8px}
+.blk{display:flex;align-items:center;gap:6px;color:var(--sub);font-size:14px}
+.x{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--sub);font-size:18px;cursor:pointer}
+.add{justify-self:start;border:0;background:none;color:var(--ink);font:inherit;font-size:14px;font-weight:700;padding:6px 0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.wdh{font-size:14px;font-weight:700;height:40px;display:flex;align-items:center;white-space:nowrap}
+select,input[type=number]{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--sub);border-radius:8px;height:40px;padding:0 6px}
+.wd.off .blks,.wd.off .wdh{opacity:.35}
+.fld{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:14px 0;border-bottom:1px solid var(--line);font-weight:700}
+.fld span{font-weight:400;color:var(--sub);font-size:14px;margin-left:6px}
+.fld input{width:120px;text-align:right}
+.sec{display:flex;justify-content:space-between;font-size:15px;font-weight:800;margin:22px 0 0;padding-bottom:8px;border-bottom:2px solid var(--ink)}
+.sec em{font-style:normal;font-weight:700;color:var(--sub)}
+.sec em.bad{color:var(--red)}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>국가근로 근무표</h1>
+    <button class="btn" id="openSet">근무 설정</button>
+  </header>
+
+  <section class="total" aria-live="polite">
+    <div class="big num" id="tot">0<small>시간</small></div>
+    <div class="tl" id="totLine"></div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+  </section>
+  <div class="stats">
+    <div><span>휴가 사용</span><b class="num" id="sLeave">0시간</b></div>
+    <div><span>예상 장학금</span><b class="num" id="sPay">0원</b></div>
+  </div>
+  <p class="warn" id="warn" hidden></p>
+  <div class="need" id="need" hidden></div>
+
+  <div class="nav">
+    <button class="navb" id="prev" aria-label="이전 달">‹</button>
+    <h2 class="num" id="ym"></h2>
+    <button class="navb" id="next" aria-label="다음 달">›</button>
+  </div>
+  <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+  <div class="grid" id="grid"></div>
+  <div class="legend"><span><i class="k1"></i>근무시간</span><span><i class="k2"></i>휴가 있음</span><span><i class="k3"></i>공휴일 · 휴무</span></div>
+  <p class="note">예시 일정(월·수 09–13시와 15–17시, 화·목 14–16시, 금 09–13시), 근무 기간 9월 1일–12월 31일, 휴가 1시간이 들어 있습니다. 공휴일은 2026–2027년 대체공휴일까지 반영했습니다.</p>
+</div>
+
+<div id="sheetHost"></div>
+
+<script>
+{
+const HOL={'2026-01-01':'신정','2026-02-16':'설날 연휴','2026-02-17':'설날','2026-02-18':'설날 연휴','2026-03-01':'삼일절','2026-03-02':'대체공휴일','2026-05-05':'어린이날','2026-05-24':'부처님오신날','2026-05-25':'대체공휴일','2026-06-03':'지방선거','2026-06-06':'현충일','2026-08-15':'광복절','2026-08-17':'대체공휴일','2026-09-24':'추석 연휴','2026-09-25':'추석','2026-09-26':'추석 연휴','2026-10-03':'개천절','2026-10-05':'대체공휴일','2026-10-09':'한글날','2026-12-25':'성탄절',
+'2027-01-01':'신정','2027-02-06':'설날 연휴','2027-02-07':'설날','2027-02-08':'설날 연휴','2027-02-09':'대체공휴일','2027-03-01':'삼일절','2027-05-05':'어린이날','2027-05-13':'부처님오신날','2027-06-06':'현충일','2027-08-15':'광복절','2027-08-16':'대체공휴일','2027-09-14':'추석 연휴','2027-09-15':'추석','2027-09-16':'추석 연휴','2027-10-03':'개천절','2027-10-04':'대체공휴일','2027-10-09':'한글날','2027-10-11':'대체공휴일','2027-12-25':'성탄절','2027-12-27':'대체공휴일'};
+const DOW=['일','월','화','수','목','금','토'];
+const TODAY='2026-11-26';
+const blk=(s,e)=>({s,e});
+const sample=()=>({
+  sched:{0:{on:false,b:[blk(9,13)]},1:{on:true,b:[blk(9,13),blk(15,17)]},2:{on:true,b:[blk(14,16)]},3:{on:true,b:[blk(9,13),blk(15,17)]},4:{on:true,b:[blk(14,16)]},5:{on:true,b:[blk(9,13)]},6:{on:false,b:[blk(9,13)]}},
+  quota:80,kind:'in',limit:20,
+  leave:{'2026-12-09':[10]},
+  period:{on:true,sm:9,sd:1,em:12,ed:31},
+  off:{},dismiss:{},view:'2026-12'});
+let S;
+try{S=JSON.parse(localStorage.getItem('kws-v2'))}catch(e){}
+if(!S||!S.sched)S=sample();
+if(!S.period)S.period=sample().period;
+if(!S.dismiss)S.dismiss={};
+if(!S.kind)S.kind='in';
+// 연도별 시급표(한국장학재단 공지 기준). 배포 후에는 정기 작업이 갱신한 표를 읽는다.
+const WAGES={2026:{in:10320,out:12790}};
+const wageYear=()=>{const y=+S.view.slice(0,4),ys=Object.keys(WAGES).map(Number).sort((a,b)=>a-b);return ys.filter(v=>v<=y).at(-1)??ys[0]};
+const wageOf=k=>{const w=WAGES[wageYear()];return w[k||S.kind]||w.in};
+const save=()=>{try{localStorage.setItem('kws-v2',JSON.stringify(S))}catch(e){}};
+const pad=n=>String(n).padStart(2,'0');
+const key=(y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
+const hh=h=>`${pad(h)}:00`;
+const won=n=>Math.round(n).toLocaleString('ko-KR');
+const dt=k=>new Date(k+'T00:00:00');
+const wdOf=k=>dt(k).getDay();
+const addDay=(k,n)=>{const x=dt(k);x.setDate(x.getDate()+n);return key(x.getFullYear(),x.getMonth()+1,x.getDate())};
+const label=k=>{const x=dt(k);return `${x.getMonth()+1}월 ${x.getDate()}일 (${DOW[x.getDay()]})`};
+let sel=null;
+
+// hours (ints) the person is scheduled to work on a weekday
+const schedHours=i=>{const c=S.sched[i];if(!c||!c.on)return [];const set=new Set();c.b.forEach(b=>{for(let h=b.s;h<b.e;h++)set.add(h)});return [...set].sort((a,b)=>a-b)};
+// one entry per scheduled hour on a date
+// work period by month-day; a start later than the end wraps over the new year
+function inPeriod(k){
+  const P=S.period;if(!P||!P.on)return true;
+  const x=dt(k),md=(x.getMonth()+1)*100+x.getDate(),s=P.sm*100+P.sd,e=P.em*100+P.ed;
+  return s<=e?(md>=s&&md<=e):(md>=s||md<=e);
+}
+function slots(k){
+  if(HOL[k]||S.off[k]||!inPeriod(k))return [];
+  const lv=S.leave[k]||[];
+  return schedHours(wdOf(k)).map(h=>({h,type:lv.includes(h)?'leave':'work'}));
+}
+const hoursOf=k=>slots(k).filter(s=>s.type==='work').length;
+const leaveOf=k=>slots(k).filter(s=>s.type==='leave').length;
+const isRest=k=>!!(HOL[k]||S.off[k])||!inPeriod(k)||[0,6].includes(wdOf(k))||!schedHours(wdOf(k)).length;
+// merge hour list into "09:00–11:00, 15:00–16:00"
+const ranges=hs=>{const s=[...hs].sort((a,b)=>a-b),out=[];s.forEach(h=>{const l=out.at(-1);if(l&&l[1]===h)l[1]=h+1;else out.push([h,h+1])});return out.map(r=>`${hh(r[0])}–${hh(r[1])}`).join(', ')};
+
+function recommend(y,m,need){
+  const days=new Date(y,m,0).getDate(),cands=[];
+  for(let d=1;d<=days;d++){
+    const k=key(y,m,d),free=slots(k).filter(s=>s.type==='work').map(s=>s.h);
+    if(!free.length)continue;
+    const pk=addDay(k,-1),nk=addDay(k,1),pr=isRest(pk),nr=isRest(nk);
+    let score=0,why='평일';
+    if(pr&&nr){score=3;why='앞뒤가 쉬는 날이라 징검다리 연휴'}
+    else if(HOL[nk]){score=2;why=`${HOL[nk]} 전날이라 연휴로 이어짐`}
+    else if(HOL[pk]){score=2;why=`${HOL[pk]} 다음 날이라 연휴로 이어짐`}
+    else if(nr||pr){score=1;why='주말과 이어 쉬기 좋음'}
+    cands.push({k,free,score,why,fromStart:pr&&!nr,future:k>=TODAY});
+  }
+  const pool=cands.some(c=>c.future)?cands.filter(c=>c.future):cands;
+  pool.sort((a,b)=>b.score-a.score||((a.free.length<=need)===(b.free.length<=need)?0:(a.free.length<=need?-1:1))||(a.k<b.k?-1:1));
+  const out=[];
+  for(const c of pool){
+    if(need<=0)break;
+    const n=Math.min(need,c.free.length);
+    const hs=c.fromStart?c.free.slice(0,n):c.free.slice(-n);
+    out.push({k:c.k,hs,why:n===c.free.length?c.why+' · 하루 전체':c.why});
+    need-=n;
+  }
+  return out;
+}
+
+function render(){
+  const [y,m]=S.view.split('-').map(Number);
+  const first=new Date(y,m-1,1).getDay(),days=new Date(y,m,0).getDate();
+  let tot=0,lv=0,html='';
+  for(let i=0;i<first;i++)html+='<span class="cell out"></span>';
+  for(let d=1;d<=days;d++){
+    const k=key(y,m,d),w=(first+d-1)%7,h=hoursOf(k),l=leaveOf(k),hn=HOL[k]||S.off[k],np=!inPeriod(k);
+    tot+=h;lv+=l;
+    const cls=['cell',w===0?'sun':'',w===6?'sat':(np&&!hn?'sat':''),hn?'hol':'',np?'npc':'',k===TODAY?'today':'',l>0?'lv':'',k===sel?'sel':''].join(' ');
+    const lab=`${m}월 ${d}일 ${DOW[w]}요일, ${hn?hn+', ':''}근무 ${h}시간${l?', 휴가 '+l+'시간':''}`;
+    html+=`<button class="${cls}" data-k="${k}" aria-label="${lab}"><span class="d num">${d}</span>${hn?`<span class="hn">${hn}</span>`:np?'<span></span>':`<span class="h num${h?'':' zero'}">${h?h+'h':'·'}</span>`}</button>`;
+  }
+  const tail=(7-(first+days)%7)%7;
+  for(let i=0;i<tail;i++)html+='<span class="cell out"></span>';
+  document.getElementById('grid').innerHTML=html;
+  document.getElementById('ym').textContent=`${y}년 ${m}월`;
+  document.getElementById('tot').innerHTML=`${tot}<small>시간</small>`;
+  const left=S.quota-tot,pct=S.quota?Math.min(100,tot/S.quota*100):0;
+  document.getElementById('totLine').innerHTML=`${m}월 근로시간<br>배정 <b class="num">${S.quota}시간</b> 중 ${left>=0?`<b class="num">${left}시간</b> 남음`:`<br><span style="white-space:nowrap"><b class="num" style="color:var(--red);font-size:19px">${-left}시간 초과</b><button class="mini" id="showRec">추천 보기</button></span>`}`;
+  document.getElementById('barFill').style.width=pct+'%';
+  document.getElementById('bar').classList.toggle('over',left<0);
+  document.getElementById('sLeave').textContent=lv+'시간';
+  document.getElementById('sPay').textContent=won(Math.min(tot,S.quota)*wageOf())+'원';
+
+  const need=document.getElementById('need'),vk=S.view;
+  if(left<0){
+    need.hidden=true;
+    document.getElementById('showRec').onclick=()=>{delete S.dismiss[vk];render()};
+    if(!S.dismiss[vk]&&!host.innerHTML)openOver(y,m,tot,-left);
+  }else{need.hidden=true;need.innerHTML='';delete S.dismiss[vk]}
+
+  const over=[];
+  for(let d=1;d<=days;d++){
+    const k=key(y,m,d);if(wdOf(k)!==1&&d!==1)continue;
+    const mon=addDay(k,-((wdOf(k)+6)%7));
+    let wk=0;for(let i=0;i<7;i++)wk+=hoursOf(addDay(mon,i));
+    if(wk>S.limit&&!over.some(o=>o.k===mon))over.push({k:mon,h:wk});
+  }
+  const w=document.getElementById('warn');
+  w.hidden=true;
+  if(false)w.textContent=`주 ${S.limit}시간 한도 초과: `+over.map(o=>`${dt(o.k).getMonth()+1}/${dt(o.k).getDate()} 주 ${o.h}시간`).join(', ');
+  save();
+}
+
+const host=document.getElementById('sheetHost');
+// closing the over-quota popup means "I'll pick myself" for this month
+function close(){if(host.querySelector('.modal'))S.dismiss[S.view]=true;host.innerHTML='';sel=null;render()}
+function open(inner,keep,kind){
+  kind=kind||'sheet';
+  const prev=host.querySelector('[role=dialog]'),st=keep&&prev?prev.scrollTop:0;
+  host.innerHTML=`<div class="scrim" id="scrim"></div><div class="${kind}${keep&&prev?' still':''}" role="dialog" aria-modal="true">${kind==='sheet'?'<div class="grab"></div>':''}${inner}</div>`;
+  const sh=host.querySelector('[role=dialog]');sh.scrollTop=st;
+  document.getElementById('scrim').onclick=close;
+  if(!keep){const f=sh.querySelector('button,select');if(f)f.focus({preventScroll:true})}
+}
+
+function openOver(y,m,tot,ex){
+  const recs=recommend(y,m,ex);
+  open(`<p class="ovk num">${m}월 ${tot}시간 / 배정 ${S.quota}시간</p><h3>${ex}시간을 초과했어요</h3><p>휴가 ${ex}시간을 써야 해요. 연휴와 이어지는 날부터 추천했어요.</p>`+
+    recs.map((r,i)=>`<div class="rec"><div><b>${label(r.k)} ${ranges(r.hs)} · ${r.hs.length}시간</b><span>${r.why}</span></div><button class="btn" data-rec="${i}">적용</button></div>`).join('')+
+    `<div class="row"><button class="btn" id="manual">직접 선택</button><button class="btn red" id="applyAll">추천 휴가 모두 적용</button></div>`,false,'modal');
+  const apply=r=>{S.leave[r.k]=[...new Set([...(S.leave[r.k]||[]),...r.hs])]};
+  host.querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>{apply(recs[+b.dataset.rec]);host.innerHTML='';render()});
+  document.getElementById('applyAll').onclick=()=>{recs.forEach(apply);host.innerHTML='';render()};
+  document.getElementById('manual').onclick=close;
+}
+
+function openDay(k,keep){
+  sel=k;render();
+  const x=dt(k),w=x.getDay(),sl=slots(k),hn=HOL[k],off=S.off[k],h=hoursOf(k),l=leaveOf(k);
+  let body='';
+  if(!hn&&!off&&!inPeriod(k))body=`<div class="empty"><b>근무 기간이 아니에요</b>근무 설정의 근무 기간(${S.period.sm}월 ${S.period.sd}일–${S.period.em}월 ${S.period.ed}일) 밖이라 근무하지 않습니다.</div>`;
+  else if(hn||off)body=`<div class="empty hol"><b>${hn||off}</b>${hn?'공휴일이라 근무하지 않습니다.':'학교 휴무일로 지정한 날입니다.'}</div>`;
+  else if(!sl.length)body=`<div class="empty"><b>근무 없는 날</b>${DOW[w]}요일은 근무 요일이 아닙니다. 근무 설정에서 바꿀 수 있습니다.</div>`;
+  else{
+    body='<p class="hint">1시간 칸을 누르면 휴가로 바뀌고, 다시 누르면 근무로 돌아옵니다.</p><div class="tline">';
+    sl.forEach((s,i)=>{
+      const nx=sl[i+1];
+      body+=`<span class="tt num">${hh(s.h)}</span><button class="slot ${s.type}" data-h="${s.h}" aria-label="${hh(s.h)}부터 1시간, ${s.type==='work'?'근무':'휴가'}">${s.type==='work'?'근무':'휴가'}<span class="num">${hh(s.h)}–${hh(s.h+1)}</span></button>`;
+      if(nx&&nx.h>s.h+1)body+=`<span class="tt num">${hh(s.h+1)}</span><div class="slot gap">근무 없음<span class="num">${hh(s.h+1)}–${hh(nx.h)}</span></div>`;
+    });
+    body+=`<span class="tt num">${hh(sl.at(-1).h+1)}</span><span></span></div>`;
+  }
+  const sub=hn||off?'근무 0시간':`근무 ${h}시간${l?' · 휴가 '+l+'시간':''}`;
+  let acts='';
+  if(sl.length)acts+=`<button class="btn" id="allLeave">${l&&!h?'휴가 모두 취소':'하루 종일 휴가'}</button>`;
+  if(!hn)acts+=`<button class="btn" id="toggleOff">${off?'휴무일 해제':'학교 휴무일로 지정'}</button>`;
+  acts+='<button class="btn dark" id="done">완료</button>';
+  open(`<div class="sh"><div><h3>${x.getMonth()+1}월 ${x.getDate()}일 (${DOW[w]})</h3><p>${sub}</p></div><div class="dayh num">${h}<small>h</small></div></div>${body}<div class="row">${acts}</div>`,keep);
+  host.querySelectorAll('button.slot').forEach(b=>b.onclick=()=>{
+    const t=+b.dataset.h,arr=S.leave[k]||[];
+    S.leave[k]=arr.includes(t)?arr.filter(v=>v!==t):[...arr,t];
+    if(!S.leave[k].length)delete S.leave[k];
+    openDay(k,true);host.querySelector(`.slot[data-h="${t}"]`)?.focus({preventScroll:true});
+  });
+  const al=document.getElementById('allLeave');
+  if(al)al.onclick=()=>{if(l&&!h)delete S.leave[k];else S.leave[k]=sl.map(s=>s.h);openDay(k,true)};
+  const to=document.getElementById('toggleOff');
+  if(to)to.onclick=()=>{if(off)delete S.off[k];else S.off[k]='학교 휴무';openDay(k,true)};
+  document.getElementById('done').onclick=close;
+}
+
+const HRS=[];for(let h=7;h<=22;h++)HRS.push(h);
+const opts=(v,list)=>list.map(h=>`<option value="${h}"${h===v?' selected':''}>${hh(h)}</option>`).join('');
+const MLEN=[31,29,31,30,31,30,31,31,30,31,30,31];
+const mo=v=>Array.from({length:12},(_,i)=>`<option value="${i+1}"${i+1===v?' selected':''}>${pad(i+1)}</option>`).join('');
+const dy=(m,v)=>Array.from({length:MLEN.at(m-1)},(_,i)=>`<option value="${i+1}"${i+1===v?' selected':''}>${pad(i+1)}</option>`).join('');
+function openSet(keep){
+  const P=S.period;
+  let rows='',week=0;
+  [1,2,3,4,5,6,0].forEach(i=>{
+    const c=S.sched[i],n=schedHours(i).length;if(c.on)week+=n;
+    rows+=`<div class="wd${c.on?'':' off'}" data-i="${i}"><label class="tog"><input type="checkbox" data-f="on"${c.on?' checked':''}>${DOW[i]}</label><div class="blks">`+
+      c.b.map((b,j)=>`<div class="blk" data-j="${j}"><select data-f="s" aria-label="${DOW[i]}요일 ${j+1}번째 시작">${opts(b.s,HRS.slice(0,-1))}</select>–<select data-f="e" aria-label="${DOW[i]}요일 ${j+1}번째 끝">${opts(b.e,HRS.slice(1))}</select>${c.b.length>1?`<button class="x" data-del="${j}" aria-label="이 시간 삭제">×</button>`:''}</div>`).join('')+
+      `<button class="add" data-add>+ 시간 추가</button></div><span class="wdh num">${n}시간</span></div>`;
+  });
+  open(`<div class="sh"><div><h3>근무 설정</h3><p>하루에 여러 시간대를 넣을 수 있어요. 바꾸면 달력이 바로 다시 계산됩니다.</p></div></div>
+  <p class="sec">근로 유형<em class="num">시급 ${won(wageOf())}원</em></p>
+  <div class="seg" role="group" aria-label="근로 유형"><button data-kind="in" aria-pressed="${S.kind==='in'}">교내 근로<span class="num">${won(wageOf('in'))}원</span></button><button data-kind="out" aria-pressed="${S.kind==='out'}">교외 근로<span class="num">${won(wageOf('out'))}원</span></button></div>
+  <p class="wnote">시급은 한국장학재단 공지에 따라 자동으로 바뀝니다. ${wageYear()<+S.view.slice(0,4)?`${S.view.slice(0,4)}년 시급이 발표되기 전이라 ${wageYear()}년 기준으로 계산합니다.`:`${wageYear()}년 기준`}</p>
+  <p class="sec">근무 기간<em>방학은 빼고 입력</em></p>
+  <div class="per${P.on?'':' off'}"><label class="pchk"><input type="checkbox" id="pOn"${P.on?' checked':''}>근무 기간 지정</label>
+  <div class="prow"><b>시작일</b><select id="pSm" aria-label="시작 월">${mo(P.sm)}</select>월<select id="pSd" aria-label="시작 일">${dy(P.sm,P.sd)}</select>일</div>
+  <div class="prow"><b>종료일</b><select id="pEm" aria-label="종료 월">${mo(P.em)}</select>월<select id="pEd" aria-label="종료 일">${dy(P.em,P.ed)}</select>일</div></div>
+  <p class="sec">요일별 근무시간<em class="num">주 ${week}시간</em></p><div id="setRows">${rows}</div>
+  <p class="sec">기준</p>
+  <label class="fld">월 배정 시간<span>넘으면 휴가 추천</span><input type="number" id="fQ" min="0" step="1" value="${S.quota}"></label>
+  <div class="row"><button class="btn" id="reset">예시로 되돌리기</button><button class="btn dark" id="done">완료</button></div>`,keep);
+  host.querySelectorAll('.wd').forEach(r=>{
+    const c=S.sched[r.dataset.i];
+    r.addEventListener('change',e=>{
+      const f=e.target.dataset.f;
+      if(f==='on')c.on=e.target.checked;
+      else{const b=c.b[+e.target.closest('.blk').dataset.j];b[f]=+e.target.value;if(b.e<=b.s){if(f==='s')b.e=b.s+1;else b.s=b.e-1}}
+      c.b.sort((a,b)=>a.s-b.s);render();openSet(true);
+    });
+    r.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{c.b.splice(+b.dataset.del,1);render();openSet(true)});
+    r.querySelector('[data-add]').onclick=()=>{const last=c.b.at(-1)||blk(8,9),s=Math.min(21,last.e+1);c.b.push(blk(s,Math.min(22,s+2)));c.on=true;render();openSet(true)};
+  });
+  const num=(id,f)=>document.getElementById(id).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(!isNaN(v)&&v>=0){S[f]=v;render();openSet(true)}});
+  num('fQ','quota');
+  host.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{S.kind=b.dataset.kind;render();openSet(true)});
+  host.querySelector('.per').addEventListener('change',()=>{
+    P.on=document.getElementById('pOn').checked;
+    P.sm=+document.getElementById('pSm').value;P.sd=Math.min(+document.getElementById('pSd').value,MLEN.at(P.sm-1));
+    P.em=+document.getElementById('pEm').value;P.ed=Math.min(+document.getElementById('pEd').value,MLEN.at(P.em-1));
+    render();openSet(true);
+  });
+  document.getElementById('reset').onclick=()=>{const v=S.view;S=sample();S.view=v;render();openSet(true)};
+  document.getElementById('done').onclick=close;
+}
+
+document.getElementById('grid').addEventListener('click',e=>{const c=e.target.closest('.cell[data-k]');if(c)openDay(c.dataset.k)});
+document.getElementById('openSet').onclick=()=>openSet();
+const shift=n=>{let [y,m]=S.view.split('-').map(Number);m+=n;if(m<1){m=12;y--}if(m>12){m=1;y++}S.view=`${y}-${pad(m)}`;render()};
+document.getElementById('prev').onclick=()=>shift(-1);
+document.getElementById('next').onclick=()=>shift(1);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&host.innerHTML)close()});
+render();
+fetch('wages.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{if(j&&j.wages){Object.assign(WAGES,j.wages);render()}}).catch(()=>{});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
